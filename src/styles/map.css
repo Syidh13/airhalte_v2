@@ -1,0 +1,56 @@
+/* =========================================================================
+   MAP UI: aturan tambahan untuk peta, kartu halte, legend, filter, ticker.
+   (MapView, HalteCard, FilterBar, ModeSwitch, Ticker, app/page.tsx)
+   Diletakkan terpisah dari globals.css supaya perubahan per fitur mudah
+   dilacak dan dihapus. Diimpor setelah globals.css di app/layout.tsx.
+   ========================================================================= */
+
+/* ---- MapView: overlay saat MapLibre gagal dimuat -------------------------
+   Di atas kontrol/legend peta (z 400), di bawah detail panel (z 500). */
+.map-failed {
+  position: absolute;
+  inset: 0;
+  z-index: 450;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 16px;
+  background: var(--surface-3);
+  text-align: center;
+}
+
+.map-failed-title {
+  margin: 0;
+  font-family: var(--font-inter), "Inter", sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.map-failed-btn {
+  padding: 8px 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-inter), "Inter", sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.map-failed-btn:hover { background: var(--surface-2); }
+
+/* ---- MapView legend: catatan singkat di bawah baris harga ---------------- */
+.map-legend .legend-note {
+  max-width: 240px;
+  margin: 8px 0 0;
+  font-family: var(--font-inter), "Inter", sans-serif;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-3);
+}
+
+.map-legend .legend-val { margin-left: 12px; }
