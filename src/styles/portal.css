@@ -1,0 +1,169 @@
+/* =========================================================================
+   PORTAL: aturan tambahan untuk header, halaman auth, InfoModals, dashboard
+   sponsor, settings, dan sidebar superadmin.
+   Diimpor setelah globals.css di app/layout.tsx.
+   ========================================================================= */
+
+/* ---- Masthead: wordmark <Logo/> ------------------------------------------
+   Tinggi logo lewat custom property; lebar dihitung dari rasio wordmark di
+   Header.tsx (inline style), jadi cukup ganti nilai ini per breakpoint. */
+.masthead .logo-wrap {
+  --masthead-logo-h: 30px;
+}
+.masthead .masthead-logo {
+  flex: none;
+}
+
+@media (max-width: 768px) {
+  .masthead .logo-wrap {
+    --masthead-logo-h: 24px;
+  }
+  /* Baris atas masthead: di layar sempit cukup label TJ. Tagline dan
+     edisi/tanggal disembunyikan supaya tidak pecah jadi empat kolom. */
+  .masthead .pre-logo > span:nth-child(n + 2),
+  .masthead .masthead-meta {
+    display: none;
+  }
+}
+
+/* ---- Halaman auth: logo + tag "by Transjakarta" --------------------------
+   .auth-logo (globals) sudah inline-flex + align baseline: baseline tag
+   bertemu dasar wordmark. Cukup rapikan jarak dan tinggi baris tag. */
+.auth-logo {
+  gap: 12px;
+}
+.auth-logo .auth-logo-tag {
+  line-height: 1;
+}
+
+/* ---- InfoModals: Harga & Paket ------------------------------------------- */
+.info-plan-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.info-plan-card {
+  display: flex;
+  flex-direction: column;
+  padding: 18px 16px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: var(--radius-md);
+}
+.info-plan-badge {
+  align-self: flex-start;
+  font-family: var(--font-inter), "Inter", sans-serif;
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--surface);
+  background: var(--brand);
+  padding: 4px 9px;
+  border-radius: var(--radius-pill);
+  margin-bottom: 12px;
+}
+.info-plan-badge.alt {
+  color: var(--text);
+  background: var(--surface-3);
+}
+.info-plan-title {
+  font-family: var(--font-fraunces), "Fraunces", serif;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
+  margin: 0 0 4px;
+}
+.info-plan-meta {
+  font-family: var(--font-inter), "Inter", sans-serif;
+  font-size: 11px;
+  color: var(--text-3);
+  margin-bottom: 12px;
+}
+.info-plan-price {
+  font-family: var(--font-inter), "Inter", sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  padding-bottom: 12px;
+  margin-bottom: 10px;
+  border-bottom: 1px dashed var(--border);
+}
+.info-plan-price span {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-3);
+  margin-left: 2px;
+}
+.info-plan-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.info-plan-list li {
+  position: relative;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-2);
+  padding: 4px 0 4px 14px;
+}
+.info-plan-list li::before {
+  content: "·";
+  position: absolute;
+  left: 2px;
+  color: var(--brand);
+  font-weight: 700;
+}
+
+/* Cara Kerja: kolom 3a/3b di antara langkah 1–2 dan langkah 4. */
+.info-flow-split {
+  margin: 12px 0;
+}
+
+/* Riwayat: empty state satu baris. */
+.info-empty-line {
+  margin: 4px 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-2);
+}
+
+@media (max-width: 768px) {
+  .info-plan-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---- Dashboard sponsor: empty state jujur (satu baris) ------------------- */
+.dash-empty-line {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-3);
+}
+.dash-empty-card {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-2);
+}
+
+/* ---- Settings: catatan untuk data read-only ------------------------------ */
+.set-readonly-note {
+  margin: 14px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-3);
+}
+
+/* Form auth: <select> tidak punya placeholder, jadi aturan global
+   `.auth-input:invalid:not(:placeholder-shown)` membuatnya merah sebelum
+   disentuh. Merah hanya setelah user berinteraksi (:user-invalid). */
+.auth-input.auth-select:invalid:not(:focus) {
+  border-color: var(--border-strong);
+}
+.auth-input.auth-select:user-invalid:not(:focus) {
+  border-color: var(--danger);
+}

@@ -1,0 +1,194 @@
+/* =========================================================================
+   COMMERCE: aturan tambahan untuk DetailPanel, BidModal, SubscribeModal,
+   dan halaman superadmin terkait lelang/langganan.
+   Diimpor setelah globals.css di app/layout.tsx.
+   ========================================================================= */
+
+/* ---------------------------------------------------------------- DetailPanel */
+/* Sumber data di bawah label baris (mis. "(OpenStreetMap)"). */
+.detail-row-src {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--text-3);
+  opacity: 0.85;
+  margin-top: 2px;
+}
+
+/* Keterangan harga yang netral (bukan status sukses). */
+.detail-delta-muted {
+  color: var(--text-3);
+  font-weight: 500;
+}
+
+/* Empty state data audiens: satu baris, tenang. */
+.audience-empty {
+  margin: 16px 0 0;
+  padding: 10px 14px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  font-family: var(--font-inter), "Inter", sans-serif;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-3);
+}
+
+/* ---------------------------------------------------------------- Modals */
+.bid-per-year {
+  font-family: var(--font-inter), "Inter", sans-serif;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 500;
+  color: var(--text-3);
+}
+
+.commerce-alert {
+  margin-top: 8px;
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-2);
+  font-family: var(--font-inter), "Inter", sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.commerce-link-btn {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--brand);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Input nominal penawaran: prefiks "Rp" + angka dengan pemisah ribuan. */
+.bid-input-wrap {
+  position: relative;
+}
+
+.bid-input-prefix {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: var(--font-inter), "Inter", sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-3);
+  pointer-events: none;
+}
+
+.modal-field-input.bid-input {
+  padding-left: 42px;
+  font-weight: 600;
+}
+
+.modal-field-input.bid-input[aria-invalid="true"] {
+  border-color: var(--danger, #c4403a);
+}
+
+.bid-input-error {
+  margin-top: 6px;
+  font-family: var(--font-inter), "Inter", sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--danger, #c4403a);
+}
+
+/* Pilihan periode langganan (bulanan / tahunan). */
+.period-options {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.period-option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  font-family: var(--font-inter), "Inter", sans-serif;
+}
+
+.period-option.active {
+  border: 2px solid var(--brand);
+  padding: 9px 11px;
+  background: var(--brand-soft);
+}
+
+.period-option:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.period-option-label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.period-option-note {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-3);
+}
+
+/* ---------------------------------------------------------------- Superadmin */
+.sa-status-badge.won  { background: #E3F4E8; color: #1F6B3A; border-color: #B8DEC4; }
+.sa-status-badge.lost { background: #F0EDE6; color: #6B645A; border-color: #D4CDB9; }
+html.dark .sa-status-badge.won  { background: #163A24; color: #A8DEB6; border-color: #265A3A; }
+html.dark .sa-status-badge.lost { background: #252840; color: #A8A39A; border-color: #363A52; }
+
+/* Nilai turunan yang tampil seperti input tetapi tidak bisa diubah. */
+.sa-input.sa-input-readonly {
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+
+/* Keterangan kecil di bawah input / sel tabel superadmin. */
+.sa-field-hint {
+  font-size: 12px;
+  color: var(--text-3);
+  margin-top: 4px;
+  line-height: 1.45;
+}
+
+.sa-field-warn {
+  font-size: 12px;
+  color: var(--danger, #c4403a);
+  font-weight: 600;
+  margin-top: 4px;
+  line-height: 1.45;
+}
+
+/* Superadmin: grafik tren tanpa data → keterangan, bukan grafik datar. */
+.sa-dash-chart-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 220px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+.sa-dash-chart-empty p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-3);
+}
+
+/* Superadmin: penanda baris data skema lama (mis. bid 36 bulan). */
+.sa-legacy-note {
+  font-size: 11px;
+  color: var(--text-3);
+}
