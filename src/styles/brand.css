@@ -1,0 +1,23 @@
+/* =========================================================================
+   BRAND: wordmark "airhalte" (komponen src/components/brand/Logo.tsx)
+   -------------------------------------------------------------------------
+   Logo memakai currentColor, jadi warnanya cukup diatur di sini.
+   Biru di latar terang, putih di latar gelap, sesuai dua versi logo resmi.
+   ========================================================================= */
+
+:root {
+  --logo-blue: #0559F4;
+}
+
+.ah-logo {
+  display: block;
+  flex: none;
+  overflow: visible;
+}
+
+.ah-logo--brand { color: var(--logo-blue); }
+.ah-logo--white { color: #FFFFFF; }
+.ah-logo--current { color: currentColor; }
+
+/* Dark mode: pakai versi putih (logo resmi versi latar gelap). */
+html.dark .ah-logo--brand { color: #FFFFFF; }
