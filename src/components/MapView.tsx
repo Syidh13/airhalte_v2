@@ -10,6 +10,12 @@ import {
   premiumDisplayPrice,
   type MapRecord,
 } from "@/lib/haltes-map";
+import {
+  getNearbyPlaces,
+  NEARBY_RADIUS_M,
+  type NearbyKind,
+  type NearbyPlace,
+} from "@/lib/overpass";
 
 // Chip label = live DB value for that halte: penawaran tertinggi when a bid
 // exists, otherwise its harga dasar (floored to Rp 100 jt). Both arrive via
@@ -249,6 +255,68 @@ const MASS_SELECTED_LAYER    = "mass-selected";
 // Points uncluster above this zoom. Floor for flyTo / easeTo.
 const CLUSTER_MAX_ZOOM = 15;
 
+// ---------------------------------------------------------------------------
+// "Tempat sekitar" overlay — hanya tampil untuk halte yang sedang diklik.
+// Sumber terpisah dari sumber halte (tidak menyentuh clustering / chip).
+// Layer dipasang PALING AWAL supaya berada di bawah semua layer halte.
+// ---------------------------------------------------------------------------
+const NEARBY_AREA_SRC_ID   = "nearby-area-src";
+const NEARBY_POI_SRC_ID    = "nearby-poi-src";
+const NEARBY_AREA_FILL     = "nearby-area-fill";
+const NEARBY_AREA_PULSE    = "nearby-area-pulse";
+const NEARBY_POI_LAYER     = "nearby-poi";
+const NEARBY_POI_LABEL     = "nearby-poi-label";
+
+const BRAND_HEX = "#1E3A5F";
+const RADAR_PERIOD_MS = 2600;
+// Selama POI masih diambil, radar berputar lebih cepat sebagai tanda loading.
+const RADAR_LOADING_PERIOD_MS = 1300;
+const SCAN_DONE_VISIBLE_MS = 2200;
+// Progres pemindaian: naik pelan menuju 92% selama menunggu data (durasi
+// asli tidak diketahui), lalu ke 100% saat data masuk. Minimal 900 ms
+// supaya hasil yang sudah di-cache tetap terlihat "dipindai" dulu.
+const SCAN_MIN_MS = 900;
+const SCAN_WAIT_CEILING = 92;
+const RADAR_RINGS = 2;
+
+const NEARBY_KIND_COLOR: Record<NearbyKind, string> = {
+  shop: "#C9772B",
+  bank: "#2E7D5B",
+  cafe: "#B5473A",
+  clinic: "#C2456E",
+  office: "#4F6A8F",
+  other: "#7A7A72",
+};
+const NEARBY_KIND_LABEL: Record<NearbyKind, string> = {
+  shop: "Toko / Retail",
+  bank: "Bank / ATM",
+  cafe: "Cafe / Resto",
+  clinic: "Klinik / Apotek",
+  office: "Kantor",
+  other: "Lainnya",
+};
+
+/**
+ * circle-radius (px) yang sama dengan `meters` di permukaan peta pada
+ * lintang `lat`. MapLibre memakai tile 512 px, jadi meter/px di zoom z =
+ * 40075016.686·cos(lat) / (512·2^z). Interpolasi eksponensial basis 2
+ * antara z0 dan z22 persis mengikuti skala itu di semua zoom.
+ */
+function metersToPixelsExpr(meters: number, lat: number, scale = 1) {
+  const px0 = (meters * scale * 512) / (40075016.686 * Math.cos((lat * Math.PI) / 180));
+  return [
+    "interpolate", ["exponential", 2], ["zoom"],
+    0, px0,
+    22, px0 * 2 ** 22,
+  ] as unknown as number;
+}
+
+function escapeHtml(str: string): string {
+  return str.replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!
+  );
+}
+
 export default function MapView({
   premiumHaltes,
   massHaltes,
@@ -296,6 +364,10 @@ export default function MapView({
 
   // ---- Last-wins rAF throttle for syncUnclusteredMarkers ----
   const syncRafRef = useRef<number | null>(null);
+
+  // Animasi radar lingkaran "Tempat sekitar".
+  const radarRafRef = useRef<number | null>(null);
+  const nearbyPopupRef = useRef<import("maplibre-gl").Popup | null>(null);
 
   // Track mode inside map event closures (avoids stale captures).
   const modeRef = useRef(mode);
@@ -460,6 +532,12 @@ export default function MapView({
         cancelAnimationFrame(syncRafRef.current);
         syncRafRef.current = null;
       }
+      if (radarRafRef.current !== null) {
+        cancelAnimationFrame(radarRafRef.current);
+        radarRafRef.current = null;
+      }
+      nearbyPopupRef.current?.remove();
+      nearbyPopupRef.current = null;
       const markers = markersRef.current;
       for (const { marker } of markers.values()) marker.remove();
       markers.clear();
@@ -517,6 +595,98 @@ export default function MapView({
           if (cancelled || setupDone) return;
           setupDone = true;
           mapReadyRef.current = true;
+
+          // -----------------------------------------------------------------
+          // "Tempat sekitar" — area radius + titik POI (di bawah layer halte).
+          // Radius area di-set per halte lewat setPaintProperty (butuh
+          // lintang halte), lihat effect "Nearby overlay".
+          // -----------------------------------------------------------------
+          const emptyFc = { type: "FeatureCollection" as const, features: [] };
+          map.addSource(NEARBY_AREA_SRC_ID, { type: "geojson", data: emptyFc });
+          map.addSource(NEARBY_POI_SRC_ID, { type: "geojson", data: emptyFc });
+
+          map.addLayer({
+            id: NEARBY_AREA_FILL,
+            type: "circle",
+            source: NEARBY_AREA_SRC_ID,
+            paint: {
+              "circle-radius": 0,
+              "circle-color": BRAND_HEX,
+              "circle-opacity": 0.07,
+              "circle-stroke-width": 1.5,
+              "circle-stroke-color": BRAND_HEX,
+              "circle-stroke-opacity": 0.35,
+              "circle-pitch-alignment": "map",
+              "circle-pitch-scale": "map",
+            },
+          });
+          for (let i = 0; i < RADAR_RINGS; i++) {
+            map.addLayer({
+              id: `${NEARBY_AREA_PULSE}-${i}`,
+              type: "circle",
+              source: NEARBY_AREA_SRC_ID,
+              paint: {
+                "circle-radius": 0,
+                "circle-color": BRAND_HEX,
+                "circle-opacity": 0,
+                "circle-stroke-width": 1.5,
+                "circle-stroke-color": BRAND_HEX,
+                "circle-stroke-opacity": 0,
+                "circle-pitch-alignment": "map",
+                "circle-pitch-scale": "map",
+                // Nilai diubah per frame — matikan transisi bawaan 300 ms.
+                "circle-radius-transition": { duration: 0 },
+                "circle-opacity-transition": { duration: 0 },
+                "circle-stroke-opacity-transition": { duration: 0 },
+              },
+            });
+          }
+          map.addLayer({
+            id: NEARBY_POI_LAYER,
+            type: "circle",
+            source: NEARBY_POI_SRC_ID,
+            paint: {
+              "circle-radius": [
+                "interpolate", ["linear"], ["zoom"],
+                12, 3, 15, 4.5, 18, 6.5,
+              ] as unknown as number,
+              "circle-color": [
+                "match", ["get", "kind"],
+                ...Object.entries(NEARBY_KIND_COLOR).flat(),
+                NEARBY_KIND_COLOR.other,
+              ] as unknown as string,
+              "circle-stroke-width": 1.5,
+              "circle-stroke-color": "#FFFFFF",
+              // Mulai transparan; effect "Nearby overlay" memunculkan titik
+              // (fade in) begitu data POI masuk.
+              "circle-opacity": 0,
+              "circle-stroke-opacity": 0,
+              "circle-opacity-transition": { duration: 500 },
+              "circle-stroke-opacity-transition": { duration: 500 },
+            },
+          });
+          map.addLayer({
+            id: NEARBY_POI_LABEL,
+            type: "symbol",
+            source: NEARBY_POI_SRC_ID,
+            minzoom: 16,
+            layout: {
+              "text-field": ["get", "name"],
+              "text-font": ["Noto Sans Regular"],
+              "text-size": 11,
+              "text-offset": [0, 0.9],
+              "text-anchor": "top",
+              "text-max-width": 9,
+              "text-optional": true,
+            },
+            paint: {
+              "text-color": "#3B3A36",
+              "text-halo-color": "rgba(255,255,255,0.9)",
+              "text-halo-width": 1.2,
+              "text-opacity": 0,
+              "text-opacity-transition": { duration: 500 },
+            },
+          });
 
           // -----------------------------------------------------------------
           // PREMIUM source + layers
@@ -709,6 +879,38 @@ export default function MapView({
           map.on("mouseleave", MASS_UNCLUSTERED_LAYER, () => {
             map.getCanvas().style.cursor = "";
           });
+
+          // POI "Tempat sekitar": hover / tap → popup nama + kategori.
+          const showPoiPopup = (e: import("maplibre-gl").MapLayerMouseEvent) => {
+            const f = e.features?.[0];
+            if (!f) return;
+            const props = f.properties as { name?: string; kind?: NearbyKind };
+            const kind = props.kind && props.kind in NEARBY_KIND_LABEL ? props.kind : "other";
+            const coords = (f.geometry as GeoJSON.Point).coordinates as [number, number];
+            nearbyPopupRef.current?.remove();
+            nearbyPopupRef.current = new maplibregl.Popup({
+              closeButton: false,
+              closeOnClick: true,
+              offset: 10,
+              className: "nearby-poi-popup",
+            })
+              .setLngLat(coords)
+              .setHTML(
+                `<div class="nearby-poi-name">${escapeHtml(props.name ?? "")}</div>` +
+                `<div class="nearby-poi-kind">${NEARBY_KIND_LABEL[kind]}</div>`
+              )
+              .addTo(map);
+          };
+          map.on("mouseenter", NEARBY_POI_LAYER, (e) => {
+            map.getCanvas().style.cursor = "pointer";
+            showPoiPopup(e);
+          });
+          map.on("mouseleave", NEARBY_POI_LAYER, () => {
+            map.getCanvas().style.cursor = "";
+            nearbyPopupRef.current?.remove();
+            nearbyPopupRef.current = null;
+          });
+          map.on("click", NEARBY_POI_LAYER, showPoiPopup);
 
           // Helper: expand a cluster from a given source
           const expandCluster = (
@@ -1003,6 +1205,175 @@ export default function MapView({
     if (map.getLayer(MASS_SELECTED_LAYER))
       map.setLayoutProperty(MASS_SELECTED_LAYER, "visibility", "none");
     // mapEpoch: re-apply the selection ring on a freshly loaded map.
+  }, [activeHalteId, mapEpoch]);
+
+  // ---------------------------------------------------------------------------
+  // Nearby overlay — area radius (dengan animasi radar) + titik POI untuk
+  // halte yang sedang diklik. Tidak ada halte aktif → semua dikosongkan.
+  // POI datang dari getNearbyPlaces, request-nya dibagi dengan DetailPanel.
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReadyRef.current) return;
+    const areaSrc = map.getSource(NEARBY_AREA_SRC_ID) as
+      | import("maplibre-gl").GeoJSONSource | undefined;
+    const poiSrc = map.getSource(NEARBY_POI_SRC_ID) as
+      | import("maplibre-gl").GeoJSONSource | undefined;
+    if (!areaSrc || !poiSrc) return;
+
+    const empty: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
+    const stopRadar = () => {
+      if (radarRafRef.current !== null) {
+        cancelAnimationFrame(radarRafRef.current);
+        radarRafRef.current = null;
+      }
+    };
+    const clear = () => {
+      stopRadar();
+      nearbyPopupRef.current?.remove();
+      nearbyPopupRef.current = null;
+      areaSrc.setData(empty);
+      poiSrc.setData(empty);
+    };
+
+    const halte = activeHalteId ? haltesById.current.get(activeHalteId) : undefined;
+    if (!halte) {
+      clear();
+      return;
+    }
+    const maplibregl = maplibreRef.current;
+
+    const setPoiOpacity = (visible: boolean) => {
+      map.setPaintProperty(NEARBY_POI_LAYER, "circle-opacity", visible ? 0.95 : 0);
+      map.setPaintProperty(NEARBY_POI_LAYER, "circle-stroke-opacity", visible ? 1 : 0);
+      map.setPaintProperty(NEARBY_POI_LABEL, "text-opacity", visible ? 1 : 0);
+    };
+    setPoiOpacity(false);
+
+    // Label status di bawah halte: "Memindai… N%" → 100% → "N tempat
+    // ditemukan" → hilang. Marker HTML supaya ikut bergerak bersama peta.
+    const pill = document.createElement("div");
+    pill.className = "nearby-scan-pill";
+    pill.setAttribute("role", "status");
+    pill.setAttribute("aria-live", "polite");
+    pill.innerHTML =
+      '<span class="nearby-scan-dots" aria-hidden="true"><span></span><span></span><span></span></span>' +
+      '<span class="nearby-scan-text">Memindai sekitar</span>' +
+      '<span class="nearby-scan-pct">0%</span>' +
+      '<span class="nearby-scan-bar" aria-hidden="true"><span></span></span>';
+    const pillMarker = maplibregl
+      ? new maplibregl.Marker({ element: pill, anchor: "top", offset: [0, 22] })
+          .setLngLat([halte.lng, halte.lat])
+          .addTo(map)
+      : null;
+    if (pillMarker) pillMarker.getElement().style.zIndex = "20";
+    const pillTimers: ReturnType<typeof setTimeout>[] = [];
+
+    areaSrc.setData({
+      type: "FeatureCollection",
+      features: [{
+        type: "Feature",
+        properties: {},
+        geometry: { type: "Point", coordinates: [halte.lng, halte.lat] },
+      }],
+    });
+    poiSrc.setData(empty);
+    map.setPaintProperty(
+      NEARBY_AREA_FILL, "circle-radius", metersToPixelsExpr(NEARBY_RADIUS_M, halte.lat)
+    );
+
+    // Radar: cincin mengembang dari pusat ke tepi radius lalu memudar.
+    // Diperbarui ~30 fps (cukup halus, separuh beban repaint 60 fps).
+    // prefers-reduced-motion → hanya area statis.
+    const reduceMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    // Fase diakumulasi per frame (bukan dari waktu mulai) supaya saat
+    // kecepatan berganti loading → normal, cincin tidak melompat.
+    let radarPeriod = RADAR_LOADING_PERIOD_MS;
+    stopRadar();
+    if (!reduceMotion) {
+      let phase = 0;
+      let last = performance.now();
+      const tick = (now: number) => {
+        radarRafRef.current = requestAnimationFrame(tick);
+        if (now - last < 33) return;
+        phase = (phase + (now - last) / radarPeriod) % 1;
+        last = now;
+        for (let i = 0; i < RADAR_RINGS; i++) {
+          const t = (phase + i / RADAR_RINGS) % 1;
+          const fade = 1 - t;
+          const id = `${NEARBY_AREA_PULSE}-${i}`;
+          map.setPaintProperty(
+            id, "circle-radius", metersToPixelsExpr(NEARBY_RADIUS_M, halte.lat, t)
+          );
+          map.setPaintProperty(id, "circle-opacity", 0.1 * fade * fade);
+          map.setPaintProperty(id, "circle-stroke-opacity", 0.45 * fade);
+        }
+      };
+      radarRafRef.current = requestAnimationFrame(tick);
+    }
+
+    // Titik POI baru dimunculkan setelah progres mencapai 100%.
+    const finishScan = (places: NearbyPlace[]) => {
+      radarPeriod = RADAR_PERIOD_MS;
+      const text = pill.querySelector(".nearby-scan-text");
+      if (text) {
+        text.textContent = places.length > 0
+          ? `${places.length} tempat ditemukan`
+          : "Data tempat sekitar belum tersedia";
+      }
+      pill.classList.add(places.length > 0 ? "is-done" : "is-empty");
+      pillTimers.push(setTimeout(() => {
+        pill.classList.add("is-hiding");
+        pillTimers.push(setTimeout(() => pillMarker?.remove(), 300));
+      }, SCAN_DONE_VISIBLE_MS));
+      poiSrc.setData({
+        type: "FeatureCollection",
+        features: places.map((p) => ({
+          type: "Feature" as const,
+          properties: { name: p.name, kind: p.kind },
+          geometry: { type: "Point" as const, coordinates: [p.lng, p.lat] },
+        })),
+      });
+      setPoiOpacity(true);
+      map.triggerRepaint();
+    };
+
+    const pctEl = pill.querySelector<HTMLElement>(".nearby-scan-pct");
+    const barEl = pill.querySelector<HTMLElement>(".nearby-scan-bar > span");
+    const startedAt = performance.now();
+    let progress = 0;
+    let result: NearbyPlace[] | null = null;
+    const progressTimer = setInterval(() => {
+      const elapsed = performance.now() - startedAt;
+      if (result && elapsed >= SCAN_MIN_MS) {
+        progress = Math.min(100, progress + Math.max(4, (100 - progress) * 0.3));
+      } else {
+        progress += (SCAN_WAIT_CEILING - progress) * 0.02;
+      }
+      const shown = Math.floor(progress);
+      if (pctEl) pctEl.textContent = `${shown}%`;
+      if (barEl) barEl.style.width = `${progress}%`;
+      if (progress >= 100 && result) {
+        clearInterval(progressTimer);
+        finishScan(result);
+      }
+    }, 40);
+
+    let cancelled = false;
+    getNearbyPlaces(halte.lat, halte.lng).then((places: NearbyPlace[]) => {
+      if (!cancelled) result = places;
+    });
+
+    return () => {
+      cancelled = true;
+      clearInterval(progressTimer);
+      stopRadar();
+      pillTimers.forEach(clearTimeout);
+      pillMarker?.remove();
+    };
+    // mapEpoch: pasang ulang overlay di instance peta yang baru dimuat.
   }, [activeHalteId, mapEpoch]);
 
   // ---------------------------------------------------------------------------
