@@ -11,7 +11,8 @@
     "seed:haltes": "npx tsx src/scripts/seed-haltes.ts",
     "seed:dry-run": "npx tsx src/scripts/seed-haltes.ts -- --dry-run",
     "clear:haltes": "npx tsx src/scripts/clear-haltes.ts",
-    "generate:map": "npx tsx src/scripts/generate-map-data.ts"
+    "generate:map": "npx tsx src/scripts/generate-map-data.ts",
+    "generate:ridership": "npx tsx src/scripts/generate-ridership.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.2",

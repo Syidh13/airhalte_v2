@@ -192,3 +192,97 @@ html.dark .sa-status-badge.lost { background: #252840; color: #A8A39A; border-co
   font-size: 11px;
   color: var(--text-3);
 }
+
+/* ------------------------------------------------- Potensi penumpang (estimasi)
+   Kartu di DetailPanel. Angka = estimasi rata-rata (lib/ridership.ts),
+   jadi badge "Estimasi" dan "Cara hitung" selalu tampil. */
+.audience-card {
+  margin: 16px 0 0;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  font-family: var(--font-inter), "Inter", sans-serif;
+}
+.audience-card[aria-busy="true"] {
+  min-height: 92px;
+}
+.audience-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.audience-kicker {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  font-weight: 700;
+}
+.audience-badge {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--brand);
+  background: var(--brand-soft);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.audience-value {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.audience-unit {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-3);
+  margin-left: 3px;
+  letter-spacing: 0;
+}
+.audience-desc {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--text-2);
+  line-height: 1.4;
+}
+.audience-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.audience-facts span {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-2);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.audience-method {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-3);
+  line-height: 1.5;
+}
+.audience-method summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text-2);
+  width: fit-content;
+}
+.audience-method p {
+  margin: 6px 0 0;
+}
+.audience-source a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

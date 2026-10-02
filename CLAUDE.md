@@ -41,6 +41,8 @@ src/
       haltes/[id]/route.ts                ← GET detail (rich fields, lazy fetch)
       haltes/[id]/bids/route.ts           ← Public GET aggregate, auth POST place bid
       haltes/[id]/subscribe/route.ts      ← Public GET history, auth POST subscribe
+      haltes/[id]/ridership/route.ts      ← GET estimasi potensi penumpang (statis, lib/ridership.ts)
+      nearby/route.ts                     ← Proxy Overpass/OSM "Tempat sekitar" (server-side, wajib User-Agent)
       haltes/availability/route.ts        ← GET polling snapshot (available + is_listed)
       admin/haltes/route.ts               ← Bypass-RLS CRUD via service role
       admin/haltes/[id]/close-auction     ← Pick winner, freeze halte
@@ -73,6 +75,7 @@ src/
     schema.sql                            ← DB schema reference + migration log
   proxy.ts                                ← Next.js 16 middleware convention (was middleware.ts)
   scripts/generate-map-data.ts            ← Bake /public/haltes-map.geojson dari DB
+  scripts/generate-ridership.ts           ← GTFS TJ → src/data/halte-ridership.generated.ts
 public/
   haltes-map.geojson                      ← Stable layer (~1.4 MB raw, ~153 KB gzipped)
 ```
@@ -173,6 +176,7 @@ Auth guards di `lib/auth.ts`:
 - Semua angka harga & periode ada di `src/lib/pricing.ts` (Non-BRT Rp 3 jt/titik/bulan, bulanan/tahunan tanpa diskon; Halte BRT harga dasar minimal Rp 100 jt/tahun, lelang, kontrak 12 bulan). Jangan hardcode angka di komponen.
 - Jumlah titik untuk copy statis ada di `src/lib/network.ts` (270 BRT + 7.306 Non-BRT = 7.576).
 - Tidak ada lagi tier S/A/B/C/D, kontrak 3 tahun, eksklusif radius, diskon, atau analitik audiens palsu. Data twin `src/data/haltes.ts` hanya fixture lama (deprecated) — jangan dipakai untuk state komersial.
+- **Potensi penumpang = estimasi rata-rata, bukan tap-in** (disetujui owner 2 Okt 2026). Rumus di `src/lib/ridership.ts`: pelanggan TJ 2025 per kelompok layanan (BRT & Non-BRT / Mikrotrans / Transjabodetabek) ÷ 365 ÷ perjalanan terjadwal kelompok itu × bus yang berhenti di titik. Data per titik dari `npm run generate:ridership` (GTFS resmi TJ). UI wajib badge "Estimasi" + "Cara hitung". Jalankan ulang generator setelah GTFS TJ berubah atau setelah `generate:map`.
 - Logo: `src/components/brand/Logo.tsx` (SVG, currentColor). Aset statis di `public/brand/`, favicon lewat `src/app/icon.svg`.
 - Migrasi DB keamanan + aturan harga: `supabase/migrations/20260930_keamanan_dan_aturan_harga.sql` — SUDAH dijalankan di project Supabase produksi pada 30 Sep 2026 (policy insert langsung bids/subscriptions dihapus, trigger guard status perusahaan, aturan bid/langganan di DB, harga dasar BRT jadi Rp 100 jt, data uji diarsipkan). Bagian bersih-data dicatat di `airhalte_meta.migrations` dan tidak akan jalan ulang.
 - CSS baru per fitur di `src/styles/{brand,map,commerce,portal}.css` (diimpor setelah globals.css).

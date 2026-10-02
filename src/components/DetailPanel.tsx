@@ -6,6 +6,8 @@ import type { HalteData } from "@/data/haltes";
 import { useFavorites, isLoggedIn } from "@/lib/favorites";
 import { normalizeStreetViewUrl } from "@/lib/streetView";
 import { getNearbyPlaces, type NearbyPlace } from "@/lib/overpass";
+import { fmtCount } from "@/lib/network";
+import { RIDERSHIP_SOURCE, type RidershipEstimate } from "@/lib/ridership";
 import {
   NON_BRT_MONTHLY_PRICE,
   PREMIUM_CONTRACT_MONTHS,
@@ -207,6 +209,12 @@ export default function DetailPanel({
     places: [],
   });
   const [nearbyOpen, setNearbyOpen] = useState(false);
+  // Estimasi potensi penumpang (data statis dari jadwal GTFS), di-tag id
+  // halte seperti `nearby` — loading = tag ≠ halte yang sedang dibuka.
+  const [ridership, setRidership] = useState<{
+    id: string | null;
+    data: RidershipEstimate | null;
+  }>({ id: null, data: null });
 
   // Live data, each tagged with the halte id it belongs to. Render only
   // trusts a tag that matches the open halte, so switching haltes never
@@ -286,6 +294,23 @@ export default function DetailPanel({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [halte?.id]);
+
+  const halteId = halte?.id;
+  useEffect(() => {
+    if (!halteId) return;
+    let cancelled = false;
+    fetch(`/api/haltes/${encodeURIComponent(halteId)}/ridership`)
+      .then((res) => (res.ok ? res.json() : { data: null }))
+      .then((body: { data?: RidershipEstimate | null }) => {
+        if (!cancelled) setRidership({ id: halteId, data: body.data ?? null });
+      })
+      .catch(() => {
+        if (!cancelled) setRidership({ id: halteId, data: null });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [halteId]);
 
   if (!halte) return null;
 
@@ -854,11 +879,75 @@ export default function DetailPanel({
           {statusRows}
         </div>
 
-        {/* Audiens — belum ada data resmi, jadi tidak ada angka estimasi. */}
+        {/* Potensi penumpang — ESTIMASI rata-rata (jadwal GTFS × pelanggan
+            TJ per jenis layanan), bukan data tap-in. Cara hitung:
+            lib/ridership.ts. Label "Estimasi" + cara hitung wajib tampil. */}
         <div className="analytics-section">
-          <p className="audience-empty">
-            Data audiens resmi (tap-in TJ) belum terhubung ke AirHalte.
-          </p>
+          {(() => {
+            if (ridership.id !== halte.id) {
+              return (
+                <div className="audience-card" aria-busy="true">
+                  <span className="skeleton-inline" aria-label="Memuat estimasi penumpang" />
+                </div>
+              );
+            }
+            const r = ridership.data;
+            if (!r) {
+              return (
+                <p className="audience-empty">
+                  Estimasi penumpang belum tersedia — titik ini tidak ada di
+                  jadwal resmi (GTFS) Transjakarta.
+                </p>
+              );
+            }
+            const shownRoutes = r.routes.slice(0, 6);
+            const moreRoutes = r.routes.length - shownRoutes.length;
+            const gtfsDate = new Date(r.gtfsDate).toLocaleDateString("id-ID", {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+            });
+            return (
+              <div className="audience-card">
+                <div className="audience-head">
+                  <span className="audience-kicker">Potensi penumpang</span>
+                  <span className="audience-badge">Estimasi</span>
+                </div>
+                <div className="audience-value">
+                  ±{fmtCount(r.passengersPerDay)}
+                  <span className="audience-unit">/hari</span>
+                </div>
+                <p className="audience-desc">
+                  penumpang diangkut bus yang berhenti di sini
+                </p>
+                <div className="audience-facts">
+                  <span>{fmtCount(r.busesPerDay)} bus berhenti/hari</span>
+                  {r.routes.length > 0 && (
+                    <span>
+                      {r.routes.length} rute: {shownRoutes.join(", ")}
+                      {moreRoutes > 0 && ` +${moreRoutes}`}
+                    </span>
+                  )}
+                </div>
+                <details className="audience-method">
+                  <summary>Cara hitung</summary>
+                  <p>
+                    {`Penumpang Transjakarta ${r.ridershipYear} per jenis layanan ` +
+                      "(BRT & Non-BRT, Mikrotrans, Transjabodetabek) dibagi rata " +
+                      "ke semua perjalanan bus terjadwal, lalu dikalikan jumlah bus " +
+                      "yang berhenti di titik ini. Ini angka rata-rata, bukan jumlah " +
+                      "orang yang naik di titik ini — data tap-in belum terhubung."}
+                  </p>
+                  <p className="audience-source">
+                    Sumber: jadwal GTFS Transjakarta ({gtfsDate}) ·{" "}
+                    <a href={RIDERSHIP_SOURCE.url} target="_blank" rel="noopener noreferrer">
+                      {RIDERSHIP_SOURCE.label}
+                    </a>
+                  </p>
+                </details>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Bid section */}
