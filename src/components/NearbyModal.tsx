@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import type { NearbyPlace, NearbyKind } from "@/lib/overpass";
 
 interface NearbyModalProps {
@@ -49,9 +50,11 @@ export default function NearbyModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  if (!open) return null;
+  if (!open || typeof document === "undefined") return null;
 
-  return (
+  // Portal ke <body>: DetailPanel memakai transform/filter, yang membuat
+  // `position: fixed` relatif ke panel — modal jadi terpotong di dalamnya.
+  return createPortal(
     <div
       className="nearby-backdrop"
       role="dialog"
@@ -111,6 +114,7 @@ export default function NearbyModal({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

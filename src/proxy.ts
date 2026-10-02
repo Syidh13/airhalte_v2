@@ -31,10 +31,13 @@ export async function proxy(request: NextRequest) {
     pathname === "/superadmin" || pathname.startsWith("/superadmin/");
 
   // GET publik ke /api/haltes/* (ketersediaan yang di-poll tiap 10 detik,
-  // detail halte yang di-cache publik, riwayat publik) tidak membaca sesi.
-  // Jangan sentuh cookie di sini supaya response publik tidak pernah
-  // membawa Set-Cookie.
-  if (request.method === "GET" && pathname.startsWith("/api/haltes")) {
+  // detail halte yang di-cache publik, riwayat publik) dan /api/nearby
+  // (proxy OpenStreetMap) tidak membaca sesi. Jangan sentuh cookie di sini
+  // supaya response publik tidak pernah membawa Set-Cookie.
+  if (
+    request.method === "GET" &&
+    (pathname.startsWith("/api/haltes") || pathname === "/api/nearby")
+  ) {
     return NextResponse.next();
   }
 
